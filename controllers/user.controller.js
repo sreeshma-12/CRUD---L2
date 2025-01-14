@@ -1,7 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user.model");
-const sendToken = require("../utils/jwtToken");
+const { deleteImage } = require("../utils/multer");
 
 const generateToken = (userEmail) => {
     const token = jwt.sign({ id: userEmail._id }, process.env.JWT_SECRET, {
@@ -15,6 +15,10 @@ exports.signup = async (req, res) => {
     const { name, email, password, latitude, longitude } = req.body;
     const profileImage = req.file.filename;
     try {
+        const userExist = await User.findOne({ email: email });
+        if (userExist) {
+            return res.status(401).json({ message: "User already exist" });
+        }
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = new User({
@@ -28,11 +32,11 @@ exports.signup = async (req, res) => {
 
         const newUser = await user.save();
 
-        res.status(201).json({ message: "User registered successfully" });
+        return res
+            .status(201)
+            .json({ message: "User registered successfully" });
     } catch (err) {
-        console.log(err);
-
-        res.status(400).json({ error: err.message });
+        return res.status(400).json({ error: err.message });
     }
 };
 
@@ -54,7 +58,7 @@ exports.login = async (req, res) => {
             expiresIn: "1h",
         });
 
-        res.status(200).json({ token });
+        return res.status(200).json({ token });
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -63,24 +67,30 @@ exports.login = async (req, res) => {
 // Get single user
 exports.getUser = async (req, res) => {
     try {
-        const user = await User.findById(req.params.id);
-
-        res.status(200).send({
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(400).send({ message: "User not found" });
+        }
+        return res.status(200).send({
             data: user,
             message: "User data fetched successfully ",
         });
     } catch (error) {
-        res.status(500).send({ message: "Internal server error" });
+        return res.status(500).send({ message: "Internal server error" });
     }
 };
 // Get update user
 exports.updateUser = async (req, res) => {
     try {
-        const { name, email, password, latitude, longitude } = req.body;
-        const profileImage = req.file ? req.file.path : undefined;
+        const { name, password, latitude, longitude } = req.body;
+
+        const userExist = await User.findById(req.userId);
+        const profileImage = req.file
+            ? req.file.filename
+            : userExist.profileImage;
+
         // const profileImage = req.file.filename;
-        const userExist = await User.findById(req.params.id);
-        console.log(userExist, "KOI");
+
         if (!userExist) {
             return res.status(401).send({
                 message: "User not found",
@@ -94,14 +104,17 @@ exports.updateUser = async (req, res) => {
             latitude,
             longitude,
         };
-        if (profileImage) {
+        if (req.file) {
             userUpdate.profileImage = profileImage;
+
+            deleteImage(userExist.profileImage);
         }
         if (password) {
             userUpdate.password = await bcrypt.hash(password, 10);
         }
+
         const updatedData = await User.findByIdAndUpdate(
-            req.params.id,
+            req.userId,
             userUpdate
         );
 
@@ -110,6 +123,8 @@ exports.updateUser = async (req, res) => {
             message: "User data updated successfully ",
         });
     } catch (error) {
+        console.log(error);
+
         res.status(500).send({ message: `${error.message}` });
     }
 };

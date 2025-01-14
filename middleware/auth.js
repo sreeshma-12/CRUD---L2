@@ -5,8 +5,10 @@ exports.authorization = async (req, res, next) => {
 
         if (authHeader && authHeader.startsWith("Bearer ")) {
             const token = authHeader.slice(7);
+            console.log(authHeader, "USERRRRRRRRRRRRRR");
             const decode = jwt.verify(token, process.env.JWT_SECRET);
             req.userId = decode.userId;
+
             next();
         } else {
             res.status(400).send({

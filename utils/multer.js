@@ -28,6 +28,7 @@ const fileFilter = (_req, file, cb) => {
 const upload = multer({ storage, fileFilter });
 const deleteImage = async (image) => {
     const filePath = path.join(__dirname, "../uploads", path.basename(image));
+
     fs.access(filePath, fs.constants.F_OK, (err) => {
         if (!err) {
             fs.unlink(filePath, (err) => {
